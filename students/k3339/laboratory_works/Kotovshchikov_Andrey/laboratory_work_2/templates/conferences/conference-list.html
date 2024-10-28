@@ -10,16 +10,16 @@
 	{% for conference in conferences %}
         <li>Название: {{ conference.name }}</li>
         <li>Автор: {{ conference.author.first_name }} {{ conference.author.last_name }}</li>
-        <a href="{% url 'conference-detail' conference.pk %}">Подробнее</a>
+        <a class="detail-link" href="{% url 'conference-detail' conference.pk %}">Подробнее</a>
 	{% endfor %}
 </ul>
 
-<div style="display: flex; align-items: center; gap: 10px;">
+<div class="pagination">
     {% for page_number in paginator.page_range %} 
         {% if page_obj.number == page_number %}
-            <p>{{ page_number }}</p>
+            <div style="background-color: aquamarine;">{{ page_number }}</div>
         {% else %}
-            <p><a href="?page={{ page_number }}">{{ page_number }}</a></p>
+            <div><a style="text-decoration: none;" href="?page={{ page_number }}">{{ page_number }}</a></div>
         {% endif %} 
     {% endfor %}
 </div>
