@@ -37,7 +37,7 @@ class ConferenceRegistrationForm(forms.ModelForm):
                 conference__isnull=True,
                 start_date__date__range=(
                     date.today(),
-                    date.today() + timedelta(days=3),
+                    date.today() + timedelta(days=10),
                 ),
             )
             .only("id", "start_date", "end_date", "room__name")
