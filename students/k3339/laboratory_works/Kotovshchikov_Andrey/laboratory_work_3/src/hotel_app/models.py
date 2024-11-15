@@ -1,7 +1,7 @@
 from django.db import models
 
 
-class PersonFullNameMixin:
+class Person(models.Model):
     first_name = models.CharField(
         max_length=70,
         null=False,
@@ -23,11 +23,14 @@ class PersonFullNameMixin:
         verbose_name="Отчество",
     )
 
+    class Meta:
+        abstract = True
+
     def __str__(self) -> str:
         return f"{self.first_name} {self.last_name}" + (self.patronymic or "")
 
 
-class Employee(PersonFullNameMixin, models.Model):
+class Employee(Person):
     hire_date = models.DateField(
         null=False,
         blank=False,
@@ -93,6 +96,7 @@ class Schedule(models.Model):
         null=False,
         blank=False,
         on_delete=models.CASCADE,
+        related_name="schedule",
         verbose_name="Работник",
     )
 
@@ -180,6 +184,7 @@ class Booking(models.Model):
         null=False,
         blank=False,
         on_delete=models.CASCADE,
+        related_name="booking",
         verbose_name="Гость",
     )
 
@@ -188,6 +193,7 @@ class Booking(models.Model):
         null=False,
         blank=False,
         on_delete=models.CASCADE,
+        related_name="booking",
         verbose_name="Гостиничный номер",
     )
 
@@ -209,7 +215,7 @@ class Booking(models.Model):
         db_table = "booking"
 
 
-class Guest(PersonFullNameMixin, models.Model):
+class Guest(Person):
     passport = models.CharField(
         unique=True,
         max_length=30,

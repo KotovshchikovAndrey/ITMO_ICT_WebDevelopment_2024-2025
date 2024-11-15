@@ -27,4 +27,4 @@ database:
 PHONY: psql
 
 psql:
-	docker exec -it postgresql psql -U $(POSTGRES_USERNAME) -d $(POSTGRES_DB);
+	docker exec -it postgresql psql -U $(POSTGRES_USERNAME) -d $(POSTGRES_DB)
