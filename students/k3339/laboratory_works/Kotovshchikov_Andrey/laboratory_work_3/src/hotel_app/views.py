@@ -144,26 +144,27 @@ class RoomBookingView(APIView):
         serializer = RoomBookingSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        room = generics.get_object_or_404(Room, id=kwargs["pk"])
-
-        is_room_available = not (
-            Booking.objects.filter(
-                room=room,
-                check_out_date__gte=timezone.now().strftime("%Y-%m-%d"),
-            )
-            .select_for_update(no_key=True)
-            .exists()
-        )
-
-        if not is_room_available:
-            raise Conflict("Гостиничный номер занят")
-
         guest = Guest.objects.filter(
             passport=serializer.validated_data["guest_passport"]
         ).first()
 
         if guest is None:
             raise BadRequest("Гость с таким паспортом не найден")
+
+        room = generics.get_object_or_404(
+            Room.objects.select_for_update(no_key=True),
+            id=kwargs["pk"],
+        )
+
+        is_room_available = not (
+            Booking.objects.filter(
+                room=room,
+                check_out_date__gte=timezone.now().strftime("%Y-%m-%d"),
+            ).exists()
+        )
+
+        if not is_room_available:
+            raise Conflict("Гостиничный номер занят")
 
         Booking.objects.create(
             room=room,
