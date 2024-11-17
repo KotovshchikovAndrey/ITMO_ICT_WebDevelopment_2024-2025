@@ -10,6 +10,7 @@ from django.db.models import (
     functions,
 )
 
+
 from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
 from django.db import transaction
@@ -17,8 +18,9 @@ from django.db import connection
 
 from rest_framework.views import APIView
 from rest_framework.request import Request
-from rest_framework import generics
 from rest_framework.response import Response
+from rest_framework import generics
+from rest_framework import filters
 
 from hotel_app import queries
 from hotel_app.filters import IsRoomAvailableFilterBackend
@@ -42,23 +44,25 @@ from hotel_project.exceptions import Conflict, BadRequest
 class EmployeeView(generics.ListCreateAPIView):
     serializer_class = EmployeeSerializer
     pagination_class = EmployeePagination
-    queryset = Employee.objects.all().order_by("hire_date")
+    queryset = Employee.objects.all()
+
+    filter_backends = [filters.OrderingFilter]
+    ordering = ("hire_date",)
 
 
 class EmployeeDetailView(generics.RetrieveUpdateAPIView):
     serializer_class = EmployeeDetailSerializer
-    queryset = (
-        Employee.objects.prefetch_related(
-            Prefetch(
-                "schedule",
-                queryset=Schedule.objects.select_related("floor")
-                .all()
-                .only("week_day", "floor__number"),
-            )
+    queryset = Employee.objects.prefetch_related(
+        Prefetch(
+            "schedule",
+            queryset=Schedule.objects.select_related("floor")
+            .all()
+            .only("week_day", "floor__number"),
         )
-        .all()
-        .order_by("hire_date")
-    )
+    ).all()
+
+    filter_backends = [filters.OrderingFilter]
+    ordering = ("hire_date",)
 
 
 class EmployeeScheduleCreateView(generics.CreateAPIView):
@@ -95,28 +99,25 @@ class GuestView(generics.ListCreateAPIView):
     pagination_class = GuestPagination
     queryset = Guest.objects.all()
 
-    filter_backends = [DjangoFilterBackend]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_fields = ("city",)
+    ordering = ("id",)
 
 
 class GuestDetailView(generics.RetrieveAPIView):
     serializer_class = GuestDetailSerializer
-    queryset = (
-        Guest.objects.prefetch_related(
-            Prefetch(
-                "booking",
-                queryset=Booking.objects.select_related(
-                    "room",
-                    "room__floor",
-                    "room__room_type",
-                )
-                .all()
-                .order_by("-check_in_date"),
+    queryset = Guest.objects.prefetch_related(
+        Prefetch(
+            "booking",
+            queryset=Booking.objects.select_related(
+                "room",
+                "room__floor",
+                "room__room_type",
             )
+            .all()
+            .order_by("-check_in_date"),
         )
-        .all()
-        .order_by("id")
-    )
+    ).all()
 
 
 class RoomView(generics.ListAPIView):
@@ -127,17 +128,11 @@ class RoomView(generics.ListAPIView):
 
 class RoomGuestView(APIView):
     def get(self, request: Request, **kwargs):
-        start_date = request.query_params.get("start_date")
-        end_date = request.query_params.get("end_date")
-
-        serializer = DateRangeSerializer(
-            data={
-                "start_date": start_date,
-                "end_date": end_date,
-            }
-        )
-
+        serializer = DateRangeSerializer(data=request.query_params)
         serializer.is_valid(raise_exception=True)
+
+        start_date = serializer.validated_data.pop("start_date")
+        end_date = serializer.validated_data.pop("end_date")
 
         room = generics.get_object_or_404(
             Room.objects.prefetch_related(
@@ -152,8 +147,7 @@ class RoomGuestView(APIView):
             id=kwargs["pk"],
         )
 
-        serializer = RoomGuestSerializer(room)
-        return Response(data=serializer.data)
+        return Response(data=RoomGuestSerializer(room).data)
 
 
 class RoomBookingView(APIView):
@@ -162,10 +156,10 @@ class RoomBookingView(APIView):
         serializer = RoomBookingSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        guest = Guest.objects.filter(
-            passport=serializer.validated_data["guest_passport"]
-        ).first()
+        guest_passport = serializer.validated_data.pop("guest_passport")
+        check_out_date = serializer.validated_data.pop("check_out_date")
 
+        guest = Guest.objects.filter(passport=guest_passport).first()
         if guest is None:
             raise BadRequest("Гость с таким паспортом не найден")
 
@@ -177,34 +171,26 @@ class RoomBookingView(APIView):
         is_room_available = not (
             Booking.objects.filter(
                 room=room,
-                check_out_date__gt=timezone.now().strftime("%Y-%m-%d"),
+                check_out_date__gt=timezone.now(),
             ).exists()
         )
 
         if not is_room_available:
             raise Conflict("Гостиничный номер занят")
 
-        Booking.objects.create(
-            room=room,
-            guest=guest,
-            check_out_date=serializer.validated_data["check_out_date"],
-        )
-
+        Booking.objects.create(room=room, guest=guest, check_out_date=check_out_date)
         return Response(data={"success": "Номер успешно забронирован"})
 
     def delete(self, request: Request, **kwargs):
         room = generics.get_object_or_404(Room, id=kwargs["pk"])
         last_booking = (
-            Booking.objects.filter(
-                room=room,
-                check_out_date__gte=timezone.now().strftime("%Y-%m-%d"),
-            )
+            Booking.objects.filter(room=room, check_out_date__gt=timezone.now())
             .order_by("-check_in_date")
             .first()
         )
 
         if last_booking is not None:
-            last_booking.check_out_date = timezone.now().date()
+            last_booking.check_out_date = timezone.now()
             last_booking.save()
 
         return Response(data={"success": "Гостиничный номер успешно освобожден"})

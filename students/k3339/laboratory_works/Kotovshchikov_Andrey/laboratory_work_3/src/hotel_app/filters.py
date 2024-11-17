@@ -2,8 +2,6 @@ from django.utils import timezone
 from django.db.models import Exists
 from rest_framework import filters
 
-from hotel_app.models import Room
-
 
 class IsRoomAvailableFilterBackend(filters.BaseFilterBackend):
     def filter_queryset(self, request, queryset, view):
@@ -12,9 +10,5 @@ class IsRoomAvailableFilterBackend(filters.BaseFilterBackend):
             return queryset
 
         return queryset.filter(
-            ~Exists(
-                queryset.filter(
-                    booking__check_out_date__gt=timezone.now().strftime("%Y-%m-%d")
-                )
-            )
+            ~Exists(queryset.filter(booking__check_out_date__gt=timezone.now()))
         )
