@@ -14,7 +14,7 @@ class IsRoomAvailableFilterBackend(filters.BaseFilterBackend):
         return queryset.filter(
             ~Exists(
                 queryset.filter(
-                    booking__check_out_date__gte=timezone.now().strftime("%Y-%m-%d")
+                    booking__check_out_date__gt=timezone.now().strftime("%Y-%m-%d")
                 )
             )
         )

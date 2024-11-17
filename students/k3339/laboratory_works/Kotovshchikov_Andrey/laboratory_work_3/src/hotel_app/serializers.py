@@ -1,3 +1,4 @@
+from django.utils import timezone
 from rest_framework import serializers
 
 from hotel_app.models import Booking, Employee, Guest, Room, RoomType, Schedule
@@ -81,6 +82,14 @@ class RoomBookingSerializer(serializers.Serializer):
     guest_passport = serializers.CharField()
     check_out_date = serializers.DateField()
 
+    def validate_check_out_date(self, check_out_date):
+        if check_out_date <= timezone.now().date():
+            raise serializers.ValidationError(
+                "Дата выселения должна быть больше текущей"
+            )
+
+        return check_out_date
+
 
 class GuestBookingSerializer(serializers.ModelSerializer):
     room = RoomSerializer(read_only=True)
@@ -109,3 +118,34 @@ class GuestDetailSerializer(serializers.ModelSerializer):
             "city",
             "booking",
         )
+
+
+class RoomGuestSerializer(serializers.ModelSerializer):
+    guests = GuestSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Room
+        fields = (
+            "id",
+            "label",
+            "phone",
+            "floor",
+            "room_type",
+            "guests",
+        )
+
+
+class DateRangeSerializer(serializers.Serializer):
+    start_date = serializers.DateField()
+    end_date = serializers.DateField()
+
+    def validate(self, data):
+        start_date = data["start_date"]
+        end_date = data["end_date"]
+
+        if start_date >= end_date:
+            raise serializers.ValidationError(
+                "Конечная дата должна быть больше даты начала"
+            )
+
+        return data

@@ -10,4 +10,4 @@ from datetime import date
 # print(start_month, end_month)
 
 
-print(date(year=2024, month=2))
+# print(date(year=2024, month=2))

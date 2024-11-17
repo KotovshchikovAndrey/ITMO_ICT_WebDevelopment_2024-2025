@@ -4,13 +4,13 @@ from django.db.models import (
     Prefetch,
     Count,
     Sum,
-    Q,
     F,
     ExpressionWrapper,
     fields,
     functions,
 )
 
+from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
 from django.db import transaction
 from django.db import connection
@@ -18,39 +18,25 @@ from django.db import connection
 from rest_framework.views import APIView
 from rest_framework.request import Request
 from rest_framework import generics
-from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 
 from hotel_app import queries
 from hotel_app.filters import IsRoomAvailableFilterBackend
 from hotel_app.models import Booking, Employee, Floor, Guest, Room, Schedule
+from hotel_app.pagination import EmployeePagination, GuestPagination
 from hotel_app.serializers import (
+    DateRangeSerializer,
     EmployeeDetailSerializer,
     EmployeeSerializer,
     GuestDetailSerializer,
     GuestSerializer,
     RoomBookingSerializer,
+    RoomGuestSerializer,
     RoomSerializer,
     ScheduleCreateSerializer,
 )
 
 from hotel_project.exceptions import Conflict, BadRequest
-
-
-class EmployeePagination(PageNumberPagination):
-    page_size = 100
-    page_size_query_param = "page_size"
-    max_page_size = 1000
-
-    def get_paginated_response(self, data):
-        return Response(
-            data={
-                "count": self.page.paginator.count,
-                "next": self.get_next_link(),
-                "previous": self.get_previous_link(),
-                "employees": data,
-            }
-        )
 
 
 class EmployeeView(generics.ListCreateAPIView):
@@ -104,26 +90,13 @@ class EmployeeScheduleResetView(APIView):
         return Response(data={"success": "Расписание работника сброшено"})
 
 
-class GuestPagination(PageNumberPagination):
-    page_size = 100
-    page_size_query_param = "page_size"
-    max_page_size = 1000
-
-    def get_paginated_response(self, data):
-        return Response(
-            data={
-                "count": self.page.paginator.count,
-                "next": self.get_next_link(),
-                "previous": self.get_previous_link(),
-                "guests": data,
-            }
-        )
-
-
 class GuestView(generics.ListCreateAPIView):
     serializer_class = GuestSerializer
     pagination_class = GuestPagination
     queryset = Guest.objects.all()
+
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ("city",)
 
 
 class GuestDetailView(generics.RetrieveAPIView):
@@ -152,6 +125,37 @@ class RoomView(generics.ListAPIView):
     filter_backends = [IsRoomAvailableFilterBackend]
 
 
+class RoomGuestView(APIView):
+    def get(self, request: Request, **kwargs):
+        start_date = request.query_params.get("start_date")
+        end_date = request.query_params.get("end_date")
+
+        serializer = DateRangeSerializer(
+            data={
+                "start_date": start_date,
+                "end_date": end_date,
+            }
+        )
+
+        serializer.is_valid(raise_exception=True)
+
+        room = generics.get_object_or_404(
+            Room.objects.prefetch_related(
+                Prefetch(
+                    "guests",
+                    queryset=Guest.objects.filter(
+                        booking__check_out_date__gt=start_date,
+                        booking__check_out_date__lt=end_date,
+                    ),
+                )
+            ),
+            id=kwargs["pk"],
+        )
+
+        serializer = RoomGuestSerializer(room)
+        return Response(data=serializer.data)
+
+
 class RoomBookingView(APIView):
     @transaction.atomic
     def post(self, request: Request, **kwargs):
@@ -173,7 +177,7 @@ class RoomBookingView(APIView):
         is_room_available = not (
             Booking.objects.filter(
                 room=room,
-                check_out_date__gte=timezone.now().strftime("%Y-%m-%d"),
+                check_out_date__gt=timezone.now().strftime("%Y-%m-%d"),
             ).exists()
         )
 
@@ -188,7 +192,22 @@ class RoomBookingView(APIView):
 
         return Response(data={"success": "Номер успешно забронирован"})
 
-    # def put(self, request: Request, **kwargs): ...
+    def delete(self, request: Request, **kwargs):
+        room = generics.get_object_or_404(Room, id=kwargs["pk"])
+        last_booking = (
+            Booking.objects.filter(
+                room=room,
+                check_out_date__gte=timezone.now().strftime("%Y-%m-%d"),
+            )
+            .order_by("-check_in_date")
+            .first()
+        )
+
+        if last_booking is not None:
+            last_booking.check_out_date = timezone.now().date()
+            last_booking.save()
+
+        return Response(data={"success": "Гостиничный номер успешно освобожден"})
 
 
 # {"guest_passport": "9999 999999", "check_out_date": "2024-11-16"}
@@ -217,7 +236,7 @@ class ReportPerQuarterView(APIView):
         )
 
         report = {
-            "guest_count": self._count_quests(quarter_start, quarter_end),
+            "checked_in_guest_count": self._count_quests(quarter_start, quarter_end),
             "room_count_per_floor": self._get_room_count_per_floor(),
             "profit_per_room": self._get_profit_per_room(quarter_start, quarter_end),
             "total_profit": self._calculate_total_profit(quarter_start, quarter_end),
@@ -231,8 +250,7 @@ class ReportPerQuarterView(APIView):
         quarter_end: date,
     ) -> int:
         return Booking.objects.filter(
-            check_in_date__gte=quarter_start.strftime("%Y-%m-%d"),
-            check_out_date__lte=quarter_end.strftime("%Y-%m-%d"),
+            check_in_date__range=[quarter_start, quarter_end],
         ).aggregate(result=Count("id"))["result"]
 
     def _get_room_count_per_floor(self) -> dict:
@@ -251,10 +269,7 @@ class ReportPerQuarterView(APIView):
         with connection.cursor() as cursor:
             cursor.execute(
                 queries.SELECT_PROFIT_PER_ROOM_FOR_QUARTER,
-                {
-                    "quarter_start": quarter_start.strftime("%Y-%m-%d"),
-                    "quarter_end": quarter_end.strftime("%Y-%m-%d"),
-                },
+                {"quarter_start": quarter_start, "quarter_end": quarter_end},
             )
 
             rows = cursor.fetchall()
@@ -269,10 +284,7 @@ class ReportPerQuarterView(APIView):
         quarter_end: date,
     ) -> int:
         return (
-            Booking.objects.filter(
-                check_in_date__gte=quarter_start.strftime("%Y-%m-%d"),
-                check_out_date__lte=quarter_end.strftime("%Y-%m-%d"),
-            )
+            Booking.objects.filter(check_in_date__range=[quarter_start, quarter_end])
             .values("room")
             .annotate(
                 profit=ExpressionWrapper(
