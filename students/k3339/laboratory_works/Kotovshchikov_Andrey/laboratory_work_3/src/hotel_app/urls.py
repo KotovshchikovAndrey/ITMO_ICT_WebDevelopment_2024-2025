@@ -35,4 +35,8 @@ urlpatterns = [
         "rooms/<int:pk>/booking/",
         view=views.RoomBookingView.as_view(),
     ),
+    path(
+        "reports/<int:quarter>/",
+        view=views.ReportPerQuarterView.as_view(),
+    ),
 ]

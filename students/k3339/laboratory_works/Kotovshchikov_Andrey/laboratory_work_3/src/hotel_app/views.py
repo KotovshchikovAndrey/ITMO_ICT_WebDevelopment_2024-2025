@@ -1,6 +1,19 @@
-from django.db.models import Prefetch
+import calendar
+from datetime import date
+from django.db.models import (
+    Prefetch,
+    Count,
+    Sum,
+    Q,
+    F,
+    ExpressionWrapper,
+    fields,
+    functions,
+)
+
 from django.utils import timezone
 from django.db import transaction
+from django.db import connection
 
 from rest_framework.views import APIView
 from rest_framework.request import Request
@@ -8,6 +21,7 @@ from rest_framework import generics
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 
+from hotel_app import queries
 from hotel_app.filters import IsRoomAvailableFilterBackend
 from hotel_app.models import Booking, Employee, Floor, Guest, Room, Schedule
 from hotel_app.serializers import (
@@ -178,3 +192,93 @@ class RoomBookingView(APIView):
 
 
 # {"guest_passport": "9999 999999", "check_out_date": "2024-11-16"}
+
+
+class ReportPerQuarterView(APIView):
+    def get(self, request: Request, **kwargs):
+        quarter = self.kwargs["quarter"]
+        if not (1 <= quarter <= 4):
+            raise BadRequest("Квартал должен принимать значения от 1 до 4 включительно")
+
+        current_year = timezone.now().year
+        quarter_start_month = 3 * (quarter - 1) + 1
+        quarter_end_month = 3 * quarter
+
+        quarter_start = date(
+            year=current_year,
+            month=quarter_start_month,
+            day=1,
+        )
+
+        quarter_end = date(
+            year=current_year,
+            month=quarter_end_month,
+            day=calendar.monthrange(current_year, quarter_end_month)[1],
+        )
+
+        report = {
+            "guest_count": self._count_quests(quarter_start, quarter_end),
+            "room_count_per_floor": self._get_room_count_per_floor(),
+            "profit_per_room": self._get_profit_per_room(quarter_start, quarter_end),
+            "total_profit": self._calculate_total_profit(quarter_start, quarter_end),
+        }
+
+        return Response(data=report)
+
+    def _count_quests(
+        self,
+        quarter_start: date,
+        quarter_end: date,
+    ) -> int:
+        return Booking.objects.filter(
+            check_in_date__gte=quarter_start.strftime("%Y-%m-%d"),
+            check_out_date__lte=quarter_end.strftime("%Y-%m-%d"),
+        ).aggregate(result=Count("id"))["result"]
+
+    def _get_room_count_per_floor(self) -> dict:
+        room_count_per_floor = dict()
+        for floor in Floor.objects.annotate(room_count=Count("rooms")):
+            room_count_per_floor[floor.number] = floor.room_count
+
+        return room_count_per_floor
+
+    def _get_profit_per_room(
+        self,
+        quarter_start: date,
+        quarter_end: date,
+    ) -> dict:
+        profit_per_room = dict()
+        with connection.cursor() as cursor:
+            cursor.execute(
+                queries.SELECT_PROFIT_PER_ROOM_FOR_QUARTER,
+                {
+                    "quarter_start": quarter_start.strftime("%Y-%m-%d"),
+                    "quarter_end": quarter_end.strftime("%Y-%m-%d"),
+                },
+            )
+
+            rows = cursor.fetchall()
+            for row in rows:
+                profit_per_room[row[1]] = row[2]
+
+        return profit_per_room
+
+    def _calculate_total_profit(
+        self,
+        quarter_start: date,
+        quarter_end: date,
+    ) -> int:
+        return (
+            Booking.objects.filter(
+                check_in_date__gte=quarter_start.strftime("%Y-%m-%d"),
+                check_out_date__lte=quarter_end.strftime("%Y-%m-%d"),
+            )
+            .values("room")
+            .annotate(
+                profit=ExpressionWrapper(
+                    functions.ExtractDay(F("check_out_date") - F("check_in_date"))
+                    * F("room__room_type__price_per_day"),
+                    output_field=fields.DecimalField(),
+                ),
+            )
+        ).aggregate(result=Sum("profit"))["result"]
