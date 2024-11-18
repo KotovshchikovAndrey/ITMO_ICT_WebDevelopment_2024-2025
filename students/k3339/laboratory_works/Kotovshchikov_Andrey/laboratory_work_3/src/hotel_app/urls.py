@@ -28,6 +28,10 @@ urlpatterns = [
         view=views.GuestDetailView.as_view(),
     ),
     path(
+        "guests/<int:pk>/overlapping/",
+        view=views.GuestOverlappingView.as_view(),
+    ),
+    path(
         "rooms/",
         view=views.RoomView.as_view(),
     ),

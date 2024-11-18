@@ -4,6 +4,7 @@ from django.db.models import (
     Prefetch,
     Count,
     Sum,
+    Value,
     F,
     ExpressionWrapper,
     fields,
@@ -11,6 +12,7 @@ from django.db.models import (
 )
 
 
+from rest_framework import filters
 from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
 from django.db import transaction
@@ -20,10 +22,9 @@ from rest_framework.views import APIView
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework import generics
-from rest_framework import filters
 
 from hotel_app import queries
-from hotel_app.filters import IsRoomAvailableFilterBackend
+from hotel_app.filters import EmployeeFilter, IsRoomAvailableFilterBackend
 from hotel_app.models import Booking, Employee, Floor, Guest, Room, Schedule
 from hotel_app.pagination import EmployeePagination, GuestPagination
 from hotel_app.serializers import (
@@ -44,9 +45,10 @@ from hotel_project.exceptions import Conflict, BadRequest
 class EmployeeView(generics.ListCreateAPIView):
     serializer_class = EmployeeSerializer
     pagination_class = EmployeePagination
-    queryset = Employee.objects.all()
+    queryset = Employee.objects.all().distinct()
 
-    filter_backends = [filters.OrderingFilter]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_class = EmployeeFilter
     ordering = ("hire_date",)
 
 
@@ -120,6 +122,36 @@ class GuestDetailView(generics.RetrieveAPIView):
     ).all()
 
 
+class GuestOverlappingView(APIView):
+    def get(self, request: Request, **kwargs):
+        serializer = DateRangeSerializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+
+        start_date = serializer.validated_data.pop("start_date")
+        end_date = serializer.validated_data.pop("end_date")
+
+        target_guest = generics.get_object_or_404(
+            Guest.objects.prefetch_related("booking"),
+            id=kwargs["pk"],
+        )
+
+        overlapping_guests_set = set()
+        for booking in target_guest.booking.filter(
+            check_in_date__lt=end_date,
+            check_out_date__gt=start_date,
+        ):
+            overlapping_guests = Guest.objects.filter(
+                city=target_guest.city,
+                booking__check_in_date__lt=booking.check_out_date,
+                booking__check_out_date__gt=booking.check_in_date,
+            ).exclude(id=target_guest.id)
+
+            overlapping_guests_set.update(overlapping_guests)
+
+        serializer = GuestSerializer(overlapping_guests_set, many=True)
+        return Response(data=serializer.data)
+
+
 class RoomView(generics.ListAPIView):
     serializer_class = RoomSerializer
     queryset = Room.objects.select_related("room_type", "floor").all()
@@ -171,6 +203,7 @@ class RoomBookingView(APIView):
         is_room_available = not (
             Booking.objects.filter(
                 room=room,
+                check_in_date__lte=timezone.now(),
                 check_out_date__gt=timezone.now(),
             ).exists()
         )
@@ -183,15 +216,19 @@ class RoomBookingView(APIView):
 
     def delete(self, request: Request, **kwargs):
         room = generics.get_object_or_404(Room, id=kwargs["pk"])
-        last_booking = (
-            Booking.objects.filter(room=room, check_out_date__gt=timezone.now())
+        actual_booking = (
+            Booking.objects.filter(
+                room=room,
+                check_in_date__lte=timezone.now(),
+                check_out_date__gt=timezone.now(),
+            )
             .order_by("-check_in_date")
             .first()
         )
 
-        if last_booking is not None:
-            last_booking.check_out_date = timezone.now()
-            last_booking.save()
+        if actual_booking is not None:
+            actual_booking.check_out_date = timezone.now()
+            actual_booking.save()
 
         return Response(data={"success": "Гостиничный номер успешно освобожден"})
 
@@ -274,7 +311,13 @@ class ReportPerQuarterView(APIView):
             .values("room")
             .annotate(
                 profit=ExpressionWrapper(
-                    functions.ExtractDay(F("check_out_date") - F("check_in_date"))
+                    functions.ExtractDay(
+                        functions.Least(
+                            Value(quarter_end + timezone.timedelta(days=1)),
+                            F("check_out_date"),
+                        )
+                        - F("check_in_date")
+                    )
                     * F("room__room_type__price_per_day"),
                     output_field=fields.DecimalField(),
                 ),
