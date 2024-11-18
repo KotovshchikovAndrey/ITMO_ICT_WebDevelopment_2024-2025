@@ -131,15 +131,20 @@ class GuestOverlappingView(APIView):
         end_date = serializer.validated_data.pop("end_date")
 
         target_guest = generics.get_object_or_404(
-            Guest.objects.prefetch_related("booking"),
+            Guest.objects.prefetch_related(
+                Prefetch(
+                    "booking",
+                    queryset=Booking.objects.filter(
+                        check_in_date__lt=end_date,
+                        check_out_date__gt=start_date,
+                    ),
+                )
+            ),
             id=kwargs["pk"],
         )
 
         overlapping_guests_set = set()
-        for booking in target_guest.booking.filter(
-            check_in_date__lt=end_date,
-            check_out_date__gt=start_date,
-        ):
+        for booking in target_guest.booking.all():
             overlapping_guests = Guest.objects.filter(
                 city=target_guest.city,
                 booking__check_in_date__lt=booking.check_out_date,
