@@ -12,18 +12,21 @@ from django.db.models import (
 )
 
 
-from rest_framework import filters
 from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
 from django.db import transaction
 from django.db import connection
+from drf_yasg.utils import swagger_auto_schema
 
+from rest_framework import filters
 from rest_framework.views import APIView
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework import generics
+from rest_framework.permissions import IsAuthenticated
 
 from hotel_app import queries
+from hotel_project.exceptions import Conflict, BadRequest
 from hotel_app.filters import EmployeeFilter, IsRoomAvailableFilterBackend
 from hotel_app.models import Booking, Employee, Floor, Guest, Room, Schedule
 from hotel_app.pagination import EmployeePagination, GuestPagination
@@ -39,10 +42,9 @@ from hotel_app.serializers import (
     ScheduleCreateSerializer,
 )
 
-from hotel_project.exceptions import Conflict, BadRequest
-
 
 class EmployeeView(generics.ListCreateAPIView):
+    permission_classes = [IsAuthenticated]
     serializer_class = EmployeeSerializer
     pagination_class = EmployeePagination
     queryset = Employee.objects.all().distinct()
@@ -53,6 +55,7 @@ class EmployeeView(generics.ListCreateAPIView):
 
 
 class EmployeeDetailView(generics.RetrieveUpdateAPIView):
+    permission_classes = [IsAuthenticated]
     serializer_class = EmployeeDetailSerializer
     queryset = Employee.objects.prefetch_related(
         Prefetch(
@@ -68,6 +71,7 @@ class EmployeeDetailView(generics.RetrieveUpdateAPIView):
 
 
 class EmployeeScheduleCreateView(generics.CreateAPIView):
+    permission_classes = [IsAuthenticated]
     serializer_class = ScheduleCreateSerializer
 
     def perform_create(self, serializer):
@@ -90,6 +94,9 @@ class EmployeeScheduleCreateView(generics.CreateAPIView):
 
 
 class EmployeeScheduleResetView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(operation_description="Сбросить расписание сотрудника")
     def delete(self, request: Request, **kwargs):
         employee = generics.get_object_or_404(Employee, id=kwargs["employee_pk"])
         employee.schedule.all().delete()
@@ -97,6 +104,7 @@ class EmployeeScheduleResetView(APIView):
 
 
 class GuestView(generics.ListCreateAPIView):
+    permission_classes = [IsAuthenticated]
     serializer_class = GuestSerializer
     pagination_class = GuestPagination
     queryset = Guest.objects.all()
@@ -107,6 +115,7 @@ class GuestView(generics.ListCreateAPIView):
 
 
 class GuestDetailView(generics.RetrieveAPIView):
+    permission_classes = [IsAuthenticated]
     serializer_class = GuestDetailSerializer
     queryset = Guest.objects.prefetch_related(
         Prefetch(
@@ -123,6 +132,16 @@ class GuestDetailView(generics.RetrieveAPIView):
 
 
 class GuestOverlappingView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        query_serializer=DateRangeSerializer,
+        operation_description=(
+            "Получить список клиентов с указанием места жительства,"
+            "которые проживали в те же дни, что и заданный клиент,"
+            "в определенный период времени"
+        ),
+    )
     def get(self, request: Request, **kwargs):
         serializer = DateRangeSerializer(data=request.query_params)
         serializer.is_valid(raise_exception=True)
@@ -158,12 +177,19 @@ class GuestOverlappingView(APIView):
 
 
 class RoomView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated]
     serializer_class = RoomSerializer
     queryset = Room.objects.select_related("room_type", "floor").all()
     filter_backends = [IsRoomAvailableFilterBackend]
 
 
 class RoomGuestView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        query_serializer=DateRangeSerializer,
+        operation_description="Получить клиентов, проживавших в заданном номере, в заданный период времени",
+    )
     def get(self, request: Request, **kwargs):
         serializer = DateRangeSerializer(data=request.query_params)
         serializer.is_valid(raise_exception=True)
@@ -188,6 +214,12 @@ class RoomGuestView(APIView):
 
 
 class RoomBookingView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        request_body=RoomBookingSerializer,
+        operation_description="Забронировать номер для пользователя на текущую дату",
+    )
     @transaction.atomic
     def post(self, request: Request, **kwargs):
         serializer = RoomBookingSerializer(data=request.data)
@@ -219,6 +251,9 @@ class RoomBookingView(APIView):
         Booking.objects.create(room=room, guest=guest, check_out_date=check_out_date)
         return Response(data={"success": "Номер успешно забронирован"})
 
+    @swagger_auto_schema(
+        operation_description="Освободить номер и выселить клиента, который забронировал этот номер на текущую дату",
+    )
     def delete(self, request: Request, **kwargs):
         room = generics.get_object_or_404(Room, id=kwargs["pk"])
         actual_booking = (
@@ -238,10 +273,18 @@ class RoomBookingView(APIView):
         return Response(data={"success": "Гостиничный номер успешно освобожден"})
 
 
-# {"guest_passport": "9999 999999", "check_out_date": "2024-11-16"}
-
-
 class ReportPerQuarterView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description=(
+            "Сформировать отчет за указанный квартал текущего года:\n"
+            "1. число клиентов за указанный период в каждом номере;\n"
+            "2. количество номеров не каждом этаже;\n"
+            "3. общая сумма дохода за каждый номер;\n"
+            "4. суммарный доход по всей гостинице\n"
+        ),
+    )
     def get(self, request: Request, **kwargs):
         quarter = self.kwargs["quarter"]
         if not (1 <= quarter <= 4):
@@ -334,7 +377,7 @@ class ReportPerQuarterView(APIView):
                         functions.Least(
                             F("check_out_date"),
                             Value(quarter_end + timezone.timedelta(days=1)),
-                        )
+                        )  # + 1 day because last month day is needing to pay
                         - functions.Greatest(
                             F("check_in_date"),
                             Value(quarter_start),
