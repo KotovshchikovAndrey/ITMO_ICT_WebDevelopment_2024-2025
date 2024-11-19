@@ -135,7 +135,7 @@ class GuestOverlappingView(APIView):
                 Prefetch(
                     "booking",
                     queryset=Booking.objects.filter(
-                        check_in_date__lt=end_date,
+                        check_in_date__lte=end_date,
                         check_out_date__gt=start_date,
                     ),
                 )
@@ -147,7 +147,7 @@ class GuestOverlappingView(APIView):
         for booking in target_guest.booking.all():
             overlapping_guests = Guest.objects.filter(
                 city=target_guest.city,
-                booking__check_in_date__lt=booking.check_out_date,
+                booking__check_in_date__lte=booking.check_out_date,
                 booking__check_out_date__gt=booking.check_in_date,
             ).exclude(id=target_guest.id)
 
@@ -177,8 +177,8 @@ class RoomGuestView(APIView):
                     "guests",
                     queryset=Guest.objects.filter(
                         booking__check_out_date__gt=start_date,
-                        booking__check_out_date__lt=end_date,
-                    ),
+                        booking__check_in_date__lte=end_date,
+                    ).distinct(),
                 )
             ),
             id=kwargs["pk"],
@@ -264,29 +264,40 @@ class ReportPerQuarterView(APIView):
         )
 
         report = {
-            "checked_in_guest_count": self._count_quests(quarter_start, quarter_end),
-            "room_count_per_floor": self._get_room_count_per_floor(),
+            "guests_per_room": self._get_guests_per_room(quarter_start, quarter_end),
+            "rooms_per_floor": self._get_rooms_per_floor(),
             "profit_per_room": self._get_profit_per_room(quarter_start, quarter_end),
             "total_profit": self._calculate_total_profit(quarter_start, quarter_end),
         }
 
         return Response(data=report)
 
-    def _count_quests(
+    def _get_guests_per_room(
         self,
         quarter_start: date,
         quarter_end: date,
     ) -> int:
-        return Booking.objects.filter(
-            check_in_date__range=[quarter_start, quarter_end],
-        ).aggregate(result=Count("id"))["result"]
+        booking_per_quarter = (
+            Booking.objects.select_related("room")
+            .filter(
+                check_out_date__gt=quarter_start,
+                check_in_date__lte=quarter_end,
+            )
+            .annotate(guest_count=Count("guest"))
+        )
 
-    def _get_room_count_per_floor(self) -> dict:
-        room_count_per_floor = dict()
+        guests_per_room = dict()
+        for booking in booking_per_quarter:
+            guests_per_room[booking.room.label] = booking.guest_count
+
+        return guests_per_room
+
+    def _get_rooms_per_floor(self) -> dict:
+        rooms_per_floor = dict()
         for floor in Floor.objects.annotate(room_count=Count("rooms")):
-            room_count_per_floor[floor.number] = floor.room_count
+            rooms_per_floor[floor.number] = floor.room_count
 
-        return room_count_per_floor
+        return rooms_per_floor
 
     def _get_profit_per_room(
         self,
@@ -312,19 +323,26 @@ class ReportPerQuarterView(APIView):
         quarter_end: date,
     ) -> int:
         return (
-            Booking.objects.filter(check_in_date__range=[quarter_start, quarter_end])
-            .values("room")
+            Booking.objects.filter(
+                check_out_date__gt=quarter_start,
+                check_in_date__lte=quarter_end,
+            )
+            .values("room__label")
             .annotate(
                 profit=ExpressionWrapper(
                     functions.ExtractDay(
                         functions.Least(
-                            Value(quarter_end + timezone.timedelta(days=1)),
                             F("check_out_date"),
+                            Value(quarter_end + timezone.timedelta(days=1)),
                         )
-                        - F("check_in_date")
+                        - functions.Greatest(
+                            F("check_in_date"),
+                            Value(quarter_start),
+                        )
                     )
                     * F("room__room_type__price_per_day"),
                     output_field=fields.DecimalField(),
                 ),
             )
-        ).aggregate(result=Sum("profit"))["result"]
+            .aggregate(result=Sum("profit"))["result"]
+        )
