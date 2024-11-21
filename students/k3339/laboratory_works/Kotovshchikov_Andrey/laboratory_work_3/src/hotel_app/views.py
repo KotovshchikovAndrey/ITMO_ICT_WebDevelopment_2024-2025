@@ -29,7 +29,7 @@ from hotel_app import queries
 from hotel_project.exceptions import Conflict, BadRequest
 from hotel_app.filters import EmployeeFilter, IsRoomAvailableFilterBackend
 from hotel_app.models import Booking, Employee, Floor, Guest, Room, Schedule
-from hotel_app.pagination import EmployeePagination, GuestPagination
+from hotel_app.pagination import EmployeePagination, GuestPagination, RoomPagination
 from hotel_app.serializers import (
     DateRangeSerializer,
     EmployeeDetailSerializer,
@@ -115,7 +115,7 @@ class GuestView(generics.ListCreateAPIView):
 
 
 class GuestDetailView(generics.RetrieveAPIView):
-    permission_classes = [IsAuthenticated]
+    # permission_classes = [IsAuthenticated]
     serializer_class = GuestDetailSerializer
     queryset = Guest.objects.prefetch_related(
         Prefetch(
@@ -166,7 +166,7 @@ class GuestOverlappingView(APIView):
         for booking in target_guest.booking.all():
             overlapping_guests = Guest.objects.filter(
                 city=target_guest.city,
-                booking__check_in_date__lte=booking.check_out_date,
+                booking__check_in_date__lt=booking.check_out_date,
                 booking__check_out_date__gt=booking.check_in_date,
             ).exclude(id=target_guest.id)
 
@@ -179,7 +179,8 @@ class GuestOverlappingView(APIView):
 class RoomView(generics.ListAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = RoomSerializer
-    queryset = Room.objects.select_related("room_type", "floor").all()
+    pagination_class = RoomPagination
+    queryset = Room.objects.select_related("room_type", "floor").all().order_by("id")
     filter_backends = [IsRoomAvailableFilterBackend]
 
 
@@ -240,7 +241,7 @@ class RoomBookingView(APIView):
         is_room_available = not (
             Booking.objects.filter(
                 room=room,
-                check_in_date__lte=timezone.now(),
+                check_in_date__lt=check_out_date,
                 check_out_date__gt=timezone.now(),
             ).exists()
         )

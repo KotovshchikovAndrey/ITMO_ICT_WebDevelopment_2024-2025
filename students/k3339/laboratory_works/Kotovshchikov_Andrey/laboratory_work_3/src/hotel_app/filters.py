@@ -3,7 +3,7 @@ from django.db.models import Exists
 from rest_framework.filters import BaseFilterBackend
 from django_filters.rest_framework import filters, FilterSet
 
-from hotel_app.models import Employee, Schedule
+from hotel_app.models import Booking, Employee, Schedule
 
 
 class IsRoomAvailableFilterBackend(BaseFilterBackend):
@@ -14,9 +14,9 @@ class IsRoomAvailableFilterBackend(BaseFilterBackend):
 
         return queryset.filter(
             ~Exists(
-                queryset.filter(
-                    booking__check_in_date__lte=timezone.now(),
-                    booking__check_out_date__gt=timezone.now(),
+                Booking.objects.filter(
+                    check_in_date__lte=timezone.now(),
+                    check_out_date__gt=timezone.now(),
                 )
             )
         )
