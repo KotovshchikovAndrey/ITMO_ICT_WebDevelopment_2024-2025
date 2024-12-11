@@ -115,7 +115,7 @@ class GuestView(generics.ListCreateAPIView):
 
 
 class GuestDetailView(generics.RetrieveAPIView):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
     serializer_class = GuestDetailSerializer
     queryset = Guest.objects.prefetch_related(
         Prefetch(
