@@ -14,6 +14,14 @@
       >
         <span class="sr-only">Загрузка...</span>
       </div>
+
+      <p *ngIf="errorMessage()" class="text-red-500 text-center">
+        {{ errorMessage() }}
+      </p>
+
+      <p *ngIf="successMessage()" class="text-green-400 text-center">
+        {{ successMessage() }}
+      </p>
     </div>
 
     <form
