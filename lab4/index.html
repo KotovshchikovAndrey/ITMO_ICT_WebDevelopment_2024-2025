@@ -8,7 +8,7 @@
         
         
         <link rel="shortcut icon" href="../img/favicon.ico">
-        <title>Лабораторная работа 3 - Web-программирование</title>
+        <title>Лабораторная работа 4 - Web-программирование</title>
         <link href="../css/bootstrap.min.css" rel="stylesheet">
         <link href="../css/fontawesome.min.css" rel="stylesheet">
         <link href="../css/brands.min.css" rel="stylesheet">
@@ -50,11 +50,11 @@
 </li>
                                     
 <li>
-    <a href="./" class="dropdown-item active" aria-current="page">Лабораторная работа 3</a>
+    <a href="../lab3/" class="dropdown-item">Лабораторная работа 3</a>
 </li>
                                     
 <li>
-    <a href="../lab4/" class="dropdown-item">Лабораторная работа 4</a>
+    <a href="./" class="dropdown-item active" aria-current="page">Лабораторная работа 4</a>
 </li>
                                 </ul>
                             </li>
@@ -76,12 +76,12 @@
                             </a>
                         </li>
                             <li class="nav-item">
-                                <a rel="prev" href="../lab2/" class="nav-link">
+                                <a rel="prev" href="../lab3/" class="nav-link">
                                     <i class="fa fa-arrow-left"></i> Previous
                                 </a>
                             </li>
                             <li class="nav-item">
-                                <a rel="next" href="../lab4/" class="nav-link">
+                                <a rel="next" href="../django_orm/" class="nav-link">
                                     Next <i class="fa fa-arrow-right"></i>
                                 </a>
                             </li>
@@ -103,13 +103,33 @@
     <div id="toc-collapse" class="navbar-collapse collapse card bg-body-tertiary">
         <ul class="nav flex-column">
             
-            <li class="nav-item" data-bs-level="1"><a href="#3-django-rest-api" class="nav-link">Лабораторная работа 3. Реализация серверной части на django rest. Документирование API.</a>
+            <li class="nav-item" data-bs-level="1"><a href="#4-4" class="nav-link">Лабораторная работа 4. Лабораторная работа 4. Реализация клиентской.</a>
               <ul class="nav flex-column">
-            <li class="nav-item" data-bs-level="2"><a href="#endpoint-" class="nav-link">Описание endpoint-ов из задания</a>
+            <li class="nav-item" data-bs-level="2"><a href="#1-cors" class="nav-link">1. Настройка политики CORS</a>
               <ul class="nav flex-column">
               </ul>
             </li>
-            <li class="nav-item" data-bs-level="2"><a href="#djoser" class="nav-link">Подключение Djoser</a>
+            <li class="nav-item" data-bs-level="2"><a href="#2" class="nav-link">2. Регистрация и авторизация</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            <li class="nav-item" data-bs-level="2"><a href="#3" class="nav-link">3. Формирование отчета</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            <li class="nav-item" data-bs-level="2"><a href="#4" class="nav-link">4. Список сотрудников</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            <li class="nav-item" data-bs-level="2"><a href="#5" class="nav-link">5. Редактирование и просмотр информации о работнике</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            <li class="nav-item" data-bs-level="2"><a href="#6" class="nav-link">6. Список гостей</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            <li class="nav-item" data-bs-level="2"><a href="#7" class="nav-link">7. Бронирование номеров</a>
               <ul class="nav flex-column">
               </ul>
             </li>
@@ -120,81 +140,67 @@
 </div></div>
                     <div class="col-md-9" role="main">
 
-<h1 id="3-django-rest-api">Лабораторная работа 3. Реализация серверной части на django rest. Документирование API.</h1>
+<h1 id="4-4">Лабораторная работа 4. Лабораторная работа 4. Реализация клиентской.</h1>
 <hr />
-<h2 id="endpoint-"><strong>Описание endpoint-ов из задания</strong></h2>
-<p>Получить информацию о клиентах, проживавших в заданном номере, в заданный период времени</p>
-<pre><code>GET /hotel/rooms/&lt;id номера&gt;/guests/
+<h2 id="1-cors">1. <strong>Настройка политики CORS</strong></h2>
+<p>Первым делом в рамках лабораторной работы номер 4 была настроена политика CORS, регламентирующая
+правила отправки запросов между разными хостами (в моем случае frontend имеет адрес localhost:4200 а backend 127.0.0.1:8000).</p>
+<p>Регистрируем <strong>corsheaders</strong> в INSTALLED_APPS:</p>
+<p><img alt="" src="../assets/lab4/install_corsheaders.png" /></p>
+<p>Затем добавляем <strong>CorsMiddleware</strong> в MIDDLEWARE:</p>
+<p><img alt="" src="../assets/lab4/add_middleware.png" /></p>
+<p>И последним шагом добавляем настройку CORS_ALLOWED_ORIGINS, где указываем
+<strong>ALLOWED_HOSTS</strong> (в нашем случае localhost:4200):</p>
+<p><img alt="" src="../assets/lab4/add_allowed_hosts.png" /></p>
+<h2 id="2">2. <strong>Регистрация и авторизация</strong></h2>
+<p>Для регистрации администратора гостиницы была создана форма с нужными полями, после заполнения
+которой приложение отправляет запрос на endpoint:</p>
+<pre><code class="language-curl">POST /auth/users/
 </code></pre>
-<p><img alt="" src="../assets/lab3/guests_at_room.png" /></p>
-<p>Получить информацию о клиентах, прибывших из заданного города</p>
-<pre><code>GET /hotel/guests/
-</code></pre>
-<p><img alt="" src="../assets/lab3/guests_from_city.png" /></p>
-<p>Получить информацию о том, кто из служащих убирал номер указанного клиента в заданный день недели</p>
-<pre><code>GET /hotel/employees/
-</code></pre>
-<p><img alt="" src="../assets/lab3/employees.png" /></p>
-<p>Получить информацию о свободных номерах в гостинице</p>
-<pre><code>GET /hotel/rooms/
-</code></pre>
-<p><img alt="" src="../assets/lab3/rooms.png" /></p>
-<p>Получить список клиентов с указанием места жительства, которые проживали в те же дни,
-что и заданный клиент, в определенный период времени</p>
-<pre><code>GET /hotel/guests/&lt;id заданного клиента&gt;/overlapping/
-</code></pre>
-<p><img alt="" src="../assets/lab3/guests_overlapping.png" /></p>
-<p>Принять на работу сотрудника</p>
-<pre><code>POST /hotel/employees/
-</code></pre>
-<p><img alt="" src="../assets/lab3/employee_create.png" /></p>
-<p>Изменить информацию о сотруднике (уволить)</p>
-<pre><code>PUT /hotel/employees/&lt;id сотрудника&gt;/
-</code></pre>
-<p><img alt="" src="../assets/lab3/employee_update.png" /></p>
-<p>Создать расписание для сотрудника</p>
-<pre><code>POST /hotel/employees/&lt;id сотрудника&gt;/schedule/
-</code></pre>
-<p><img alt="" src="../assets/lab3/schedule_create.png" /></p>
-<p>Сбросить расписание сотрудника</p>
-<pre><code>DELETE /hotel/employees/&lt;int:pk&gt;/schedule/reset/
-</code></pre>
-<p><img alt="" src="../assets/lab3/schedule_reset.png" /></p>
-<p>Внести информацию о клиенте</p>
-<pre><code>POST /hotel/guests/
-</code></pre>
-<p><img alt="" src="../assets/lab3/guest_create.png" /></p>
-<p>Поселить клиента в номер</p>
-<pre><code>POST /hotel/rooms/&lt;id номера&gt;/booking/
-</code></pre>
-<p><img alt="" src="../assets/lab3/booking_create.png" /></p>
-<p>Освободить номер (выселить проживающего в данный момент клиента)</p>
-<pre><code>DELETE /hotel/rooms/&lt;id номера, который нужно освободить&gt;/booking/
-</code></pre>
-<p><img alt="" src="../assets/lab3/booking_delete.png" /></p>
-<p>Сформировать отчет за квартал текущего года, содежащий:</p>
-<ol>
-<li>число клиентов за указанный период в каждом номере;</li>
-<li>количество номеров не каждом этаже;</li>
-<li>общая сумма дохода за каждый номер;</li>
-<li>суммарный доход по всей гостинице.</li>
-</ol>
-<pre><code>GET /hotel/reports/&lt;номер квартала от 1 до 4 включительно&gt;/
-</code></pre>
-<p><img alt="" src="../assets/lab3/reports.png" /></p>
-<h2 id="djoser"><strong>Подключение Djoser</strong></h2>
-<p>Регистрация</p>
-<pre><code>POST /auth/users/
-</code></pre>
-<p><img alt="" src="../assets/lab3/sign-up.png" /></p>
-<p>Получение токена</p>
-<pre><code>POST /auth/token/login/
-</code></pre>
-<p><img alt="" src="../assets/lab3/sign-in.png" /></p>
-<p>Получение информации о текущем пользователе</p>
-<pre><code>GET /auth/users/me/
-</code></pre>
-<p><img alt="" src="../assets/lab3/get_user.png" /></p></div>
+<p><img alt="" src="../assets/lab4/sign-up.png" /></p>
+<p>После успеной регистрации мы попадаем на страницу авторизации:</p>
+<p><img alt="" src="../assets/lab4/sign-in.png" /></p>
+<p>В случае ввода неверного логина (email) или пароля вывыдется специальное сообщение:</p>
+<p><img alt="" src="../assets/lab4/invalid_sign-in.png" /></p>
+<p>После ввода корректных данных и отправки формы сервер вернет нам токен, который будет сохранен в <strong>LocalStorage</strong> для того, чтобы в будущем можно было использовать его для аутентификации при отправке прочих запросов.</p>
+<p><img alt="" src="../assets/lab4/localstorage.png" /></p>
+<h2 id="3">3. <strong>Формирование отчета</strong></h2>
+<p>На странице с формированием отчета присутствует <strong>селектор</strong> для выбора квартала, за который
+мы хотим сформировать отчет:</p>
+<p><img alt="" src="../assets/lab4/reports.png" /></p>
+<p>После выбора квартала и нажатия кнопки у нас внизу появится отчет в виде таблицы:</p>
+<p><img alt="" src="../assets/lab4/created_report.png" /></p>
+<h2 id="4">4. <strong>Список сотрудников</strong></h2>
+<p>При выборе соответсвующего пункта меня в навигации мы попадем на
+страницу с отображением списка из карточек сотрудников гостиницы:</p>
+<p><img alt="" src="../assets/lab4/employees.png" /></p>
+<p>При клике на карточку мы перейдем на детальную страницу работника, где
+можно посмотреть и изменить его расписание.</p>
+<h2 id="5">5. <strong>Редактирование и просмотр информации о работнике</strong></h2>
+<p>На детальной странице работника мы можем сбросить его расписани либо
+указать в какой день недели он убирает соответсвующий этаж. В специальной таблице формируется полное
+расписание работника.</p>
+<p><img alt="" src="../assets/lab4/schedule.png" /></p>
+<p>В случае обнаружения пересечений в расписании система нас предупредит:</p>
+<p><img alt="" src="../assets/lab4/schedule_incorrect.png" /></p>
+<p>Также мы можем уволить работника, указав соответсвующую дату:</p>
+<p><img alt="" src="../assets/lab4/dismissal_employee.png" /></p>
+<h2 id="6">6. <strong>Список гостей</strong></h2>
+<p>Помимо списка работников мы можем также посмотреть список гостей и отфильтовать их
+по нужному городу:</p>
+<p><img alt="" src="../assets/lab4/filter_guests.png" /></p>
+<h2 id="7">7. <strong>Бронирование номеров</strong></h2>
+<p>При переходе на специальную страницу мы увидим информацию обо всех
+гостиничных номерах:</p>
+<p><img alt="" src="../assets/lab4/rooms.png" /></p>
+<p>При необходимости можно выбрать только свободные намера, нажав на checkbox:</p>
+<p><img alt="" src="../assets/lab4/available_rooms.png" /></p>
+<p>При нажатии на карточку с номером открывается модальное окно, где нужно
+указать серию и номер паспорта гостя и дату планируемого выселения. После ввода
+всех необходимых данных номер будет успешно забронирован:</p>
+<p><img alt="" src="../assets/lab4/booking.png" /></p>
+<p>Если обнаружится пересечение брони с другим клиентом выведется сообщение об ошибке:</p>
+<p><img alt="" src="../assets/lab4/booking_error.png" /></p></div>
             </div>
         </div>
 
