@@ -1,5 +1,5 @@
 from django.utils import timezone
-from django.db.models import Exists
+from django.db.models import Exists, OuterRef
 from rest_framework.filters import BaseFilterBackend
 from django_filters.rest_framework import filters, FilterSet
 
@@ -15,6 +15,7 @@ class IsRoomAvailableFilterBackend(BaseFilterBackend):
         return queryset.filter(
             ~Exists(
                 Booking.objects.filter(
+                    room=OuterRef("pk"),
                     check_in_date__lte=timezone.now(),
                     check_out_date__gt=timezone.now(),
                 )

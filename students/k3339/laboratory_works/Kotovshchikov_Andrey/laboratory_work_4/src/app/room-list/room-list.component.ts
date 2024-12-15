@@ -1,6 +1,5 @@
 import { Component, OnInit, signal } from '@angular/core';
 import { IRoom } from '../types';
-import { Router } from '@angular/router';
 import { HotelService } from '../hotel.service';
 import { finalize } from 'rxjs';
 import { NgIf } from '@angular/common';

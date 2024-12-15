@@ -1,12 +1,5 @@
 import { NgIf } from '@angular/common';
-import {
-  AfterViewInit,
-  Component,
-  computed,
-  effect,
-  input,
-  signal,
-} from '@angular/core';
+import { Component, effect, input, signal } from '@angular/core';
 import { HotelService } from '../hotel.service';
 import { finalize } from 'rxjs';
 import {
@@ -18,7 +11,6 @@ import {
 } from '@angular/forms';
 import { ICreateBookingRequest } from '../types';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Router } from '@angular/router';
 
 @Component({
   selector: 'room-booking-modal',
