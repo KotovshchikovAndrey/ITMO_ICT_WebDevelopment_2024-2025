@@ -7,21 +7,20 @@ import {
   ReactiveFormsModule,
   Validators,
 } from '@angular/forms';
-import { AuthService } from '../auth.service';
+import { Router } from '@angular/router';
+import { HotelService } from '../hotel.service';
+import { IAddGuestRequest } from '../types';
 import { finalize } from 'rxjs';
-import { Router, RouterLink } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
-import { ISignUpRequest } from '../types';
 
 @Component({
-  selector: 'app-sign-up',
+  selector: 'app-guest-form',
   standalone: true,
-  imports: [FormsModule, ReactiveFormsModule, NgIf, RouterLink],
-  templateUrl: './sign-up.component.html',
-  styleUrl: './sign-up.component.css',
-  providers: [AuthService],
+  imports: [FormsModule, ReactiveFormsModule, NgIf],
+  templateUrl: './guest-form.component.html',
+  styleUrl: './guest-form.component.css',
 })
-export class SignUpComponent {
+export class GuestFormComponent {
   form = new FormGroup({
     firstName: new FormControl('', {
       nonNullable: true,
@@ -31,21 +30,17 @@ export class SignUpComponent {
       nonNullable: true,
       validators: [Validators.required, Validators.maxLength(70)],
     }),
-    email: new FormControl('', {
-      nonNullable: true,
-      validators: [
-        Validators.required,
-        Validators.email,
-        Validators.maxLength(70),
-      ],
+    patronymic: new FormControl(null, {
+      nonNullable: false,
+      validators: [Validators.maxLength(70)],
     }),
-    password: new FormControl('', {
+    passport: new FormControl('', {
       nonNullable: true,
-      validators: [
-        Validators.required,
-        Validators.minLength(8),
-        Validators.maxLength(100),
-      ],
+      validators: [],
+    }),
+    city: new FormControl('', {
+      nonNullable: true,
+      validators: [],
     }),
   });
 
@@ -54,31 +49,32 @@ export class SignUpComponent {
 
   constructor(
     private readonly router: Router,
-    private readonly authService: AuthService
+    private readonly hotelService: HotelService
   ) {}
 
   submit(event: Event) {
-    event.preventDefault();
     if (this.form.invalid) {
       return;
     }
 
-    const data: ISignUpRequest = {
+    const data: IAddGuestRequest = {
       first_name: this.firstNameControl.value,
       last_name: this.lastNameControl.value,
-      email: this.emailControl.value,
-      password: this.passwordControl.value,
+      patronymic: this.patronymicControl.value,
+      passport: this.passportControl.value,
+      city: this.cityControl.value,
     };
 
     this.isLoading.set(true);
-    this.authService
-      .signUp(data)
+    this.hotelService
+      .addGuest(data)
       .pipe(finalize(() => this.isLoading.set(false)))
       .subscribe({
-        next: () => this.router.navigateByUrl('/sign-in'),
+        next: () => this.router.navigateByUrl('/guests'),
         error: (err: HttpErrorResponse) => {
-          if ('email' in err.error) {
-            this.errorMessage.set('Администратор с таким email уже существует');
+          console.log(err.error);
+          if ('detail' in err.error) {
+            this.errorMessage.set(err.error['detail']);
           } else {
             this.errorMessage.set('Что то пошло не так, повторите позже');
           }
@@ -94,11 +90,15 @@ export class SignUpComponent {
     return this.form.controls.lastName;
   }
 
-  get emailControl() {
-    return this.form.controls.email;
+  get patronymicControl() {
+    return this.form.controls.patronymic;
   }
 
-  get passwordControl() {
-    return this.form.controls.password;
+  get passportControl() {
+    return this.form.controls.passport;
+  }
+
+  get cityControl() {
+    return this.form.controls.city;
   }
 }

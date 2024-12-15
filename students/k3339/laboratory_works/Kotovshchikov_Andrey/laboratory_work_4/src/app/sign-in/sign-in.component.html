@@ -1,9 +1,9 @@
 <div class="container m-auto">
-  <h2 class="text-[32px] text-center mb-10">Авторизация</h2>
+  <h2 class="text-[32px] font-bold text-center mb-10">Авторизация</h2>
   <form
     [formGroup]="form"
     (ngSubmit)="submit($event)"
-    class="flex flex-col gap-5 px-64"
+    class="flex flex-col gap-5 px-80"
   >
     <div>
       <label for="email">Email</label>
@@ -51,9 +51,13 @@
       </div>
     </div>
 
+    <div>
+      <a class="text-sky-400" routerLink="/sign-up">Зарегистрироваться</a>
+    </div>
+
     <button
       [disabled]="form.invalid"
-      class="px-10 py-3 self-center bg-sky-300 rounded-lg text-[18px] font-medium text-white hover:bg-sky-400 transition-all cursor-pointer"
+      class="px-10 py-3 self-center bg-sky-400 rounded-lg text-[18px] font-medium text-white hover:bg-sky-500 transition-all cursor-pointer"
     >
       Войти
     </button>

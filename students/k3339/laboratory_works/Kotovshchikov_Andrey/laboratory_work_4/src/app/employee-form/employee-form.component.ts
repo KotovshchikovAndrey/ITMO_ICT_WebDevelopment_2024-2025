@@ -7,21 +7,20 @@ import {
   ReactiveFormsModule,
   Validators,
 } from '@angular/forms';
-import { AuthService } from '../auth.service';
+import { Router } from '@angular/router';
+import { HotelService } from '../hotel.service';
+import { IHireEmployeeRequest } from '../types';
 import { finalize } from 'rxjs';
-import { Router, RouterLink } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
-import { ISignUpRequest } from '../types';
 
 @Component({
-  selector: 'app-sign-up',
+  selector: 'app-employee-form',
   standalone: true,
-  imports: [FormsModule, ReactiveFormsModule, NgIf, RouterLink],
-  templateUrl: './sign-up.component.html',
-  styleUrl: './sign-up.component.css',
-  providers: [AuthService],
+  imports: [FormsModule, ReactiveFormsModule, NgIf],
+  templateUrl: './employee-form.component.html',
+  styleUrl: './employee-form.component.css',
 })
-export class SignUpComponent {
+export class EmployeeFormComponent {
   form = new FormGroup({
     firstName: new FormControl('', {
       nonNullable: true,
@@ -31,30 +30,23 @@ export class SignUpComponent {
       nonNullable: true,
       validators: [Validators.required, Validators.maxLength(70)],
     }),
-    email: new FormControl('', {
-      nonNullable: true,
-      validators: [
-        Validators.required,
-        Validators.email,
-        Validators.maxLength(70),
-      ],
+    patronymic: new FormControl(null, {
+      nonNullable: false,
+      validators: [Validators.maxLength(70)],
     }),
-    password: new FormControl('', {
+    hireDate: new FormControl('', {
       nonNullable: true,
-      validators: [
-        Validators.required,
-        Validators.minLength(8),
-        Validators.maxLength(100),
-      ],
+      validators: [Validators.required],
     }),
   });
 
   readonly isLoading = signal<boolean>(false);
+  readonly successMessage = signal<string>('');
   readonly errorMessage = signal<string>('');
 
   constructor(
     private readonly router: Router,
-    private readonly authService: AuthService
+    private readonly hotelService: HotelService
   ) {}
 
   submit(event: Event) {
@@ -63,22 +55,23 @@ export class SignUpComponent {
       return;
     }
 
-    const data: ISignUpRequest = {
+    const data: IHireEmployeeRequest = {
       first_name: this.firstNameControl.value,
       last_name: this.lastNameControl.value,
-      email: this.emailControl.value,
-      password: this.passwordControl.value,
+      patronymic: this.patronymicControl.value,
+      hire_date: this.hireDateControl.value,
     };
 
     this.isLoading.set(true);
-    this.authService
-      .signUp(data)
+    this.hotelService
+      .hireEmployee(data)
       .pipe(finalize(() => this.isLoading.set(false)))
       .subscribe({
-        next: () => this.router.navigateByUrl('/sign-in'),
+        next: () => this.successMessage.set('Работник успешно нанят'),
         error: (err: HttpErrorResponse) => {
-          if ('email' in err.error) {
-            this.errorMessage.set('Администратор с таким email уже существует');
+          console.log(err.error);
+          if ('detail' in err.error) {
+            this.errorMessage.set(err.error['detail']);
           } else {
             this.errorMessage.set('Что то пошло не так, повторите позже');
           }
@@ -94,11 +87,11 @@ export class SignUpComponent {
     return this.form.controls.lastName;
   }
 
-  get emailControl() {
-    return this.form.controls.email;
+  get patronymicControl() {
+    return this.form.controls.patronymic;
   }
 
-  get passwordControl() {
-    return this.form.controls.password;
+  get hireDateControl() {
+    return this.form.controls.hireDate;
   }
 }

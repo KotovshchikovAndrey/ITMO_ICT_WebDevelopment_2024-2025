@@ -320,7 +320,7 @@ class ReportPerQuarterView(APIView):
         self,
         quarter_start: date,
         quarter_end: date,
-    ) -> int:
+    ) -> dict:
         booking_per_quarter = (
             Booking.objects.select_related("room")
             .filter(
@@ -389,4 +389,4 @@ class ReportPerQuarterView(APIView):
                 ),
             )
             .aggregate(result=Sum("profit"))["result"]
-        )
+        ) or 0

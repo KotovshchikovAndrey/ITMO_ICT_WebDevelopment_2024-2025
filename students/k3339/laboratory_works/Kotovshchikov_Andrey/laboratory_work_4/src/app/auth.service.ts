@@ -8,6 +8,7 @@ import { tap } from 'rxjs';
 })
 export class AuthService {
   private readonly baseUrl: string = 'http://127.0.0.1:8000/auth';
+  private _isAuth = false;
 
   constructor(private readonly http: HttpClient) {}
 
@@ -23,5 +24,23 @@ export class AuthService {
       .pipe(
         tap((response) => localStorage.setItem('token', response.auth_token))
       );
+  }
+
+  logout() {
+    localStorage.removeItem('token');
+    this._isAuth = false;
+  }
+
+  getAuthToken() {
+    return localStorage.getItem('token');
+  }
+
+  get isAuth() {
+    if (!this._isAuth) {
+      const token = localStorage.getItem('token');
+      this._isAuth = !!token;
+    }
+
+    return this._isAuth;
   }
 }
